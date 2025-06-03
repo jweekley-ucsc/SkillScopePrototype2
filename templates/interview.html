@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SkillScope Interview</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-50 min-h-screen text-gray-800">
+  <main class="max-w-4xl mx-auto py-8 px-4">
+    <h1 class="text-3xl font-semibold mb-4">Interview Session</h1>
+
+    <section class="bg-white p-4 rounded shadow mb-6">
+      <h2 class="text-xl font-medium mb-2">Prompt</h2>
+      <p id="questionPrompt" class="text-gray-700">Please respond to the prompt by speaking aloud. Your response will be recorded and transcribed.</p>
+    </section>
+
+    <section class="bg-white p-4 rounded shadow mb-6">
+      <h2 class="text-xl font-medium mb-2">Recording Controls</h2>
+      <div class="flex items-center space-x-4">
+        <button id="recordButton" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Start Recording</button>
+        <button id="stopButton" class="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500 hidden">Stop Recording</button>
+        <span id="timerDisplay" class="ml-auto text-lg font-mono">60:00</span>
+      </div>
+    </section>
+
+    <section id="transcriptSection" class="bg-white p-4 rounded shadow mb-6 hidden">
+      <h2 class="text-xl font-medium mb-2">Transcript Preview</h2>
+      <pre id="transcriptPreview" class="bg-gray-100 p-2 rounded overflow-auto text-sm whitespace-pre-wrap max-h-64"></pre>
+    </section>
+
+    <section class="bg-white p-4 rounded shadow mb-6">
+      <h2 class="text-xl font-medium mb-2">Reflection</h2>
+      <textarea id="reflectionInput" class="w-full border border-gray-300 rounded p-2" rows="5" placeholder="Write a brief reflection about your experience..."></textarea>
+    </section>
+
+    <div class="flex justify-end">
+      <button id="submitTranscriptBtn" class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 hidden">Submit Transcript</button>
+    </div>
+  </main>
+
+  <script src="/static/scripts/interview.js"></script>
+</body>
+</html>

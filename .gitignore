@@ -1,0 +1,31 @@
+# Python cache and environment files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+
+# Environment variables
+.env
+
+# Audio and transcript files
+uploaded_audio/
+transcripts/
+
+# VS Code project files
+.vscode/
+
+# Mac system files
+.DS_Store
+
+#Any blobs created by recordings
+*.webm
+*.wav
+
+#Logs and debugging
+*.log
+
+# Session and registration data
+*.jsonl

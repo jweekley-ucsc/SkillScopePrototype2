@@ -1,0 +1,16 @@
+Skill,Level,Score,Description
+Prompt Engineering,Missing,0,No prompt provided or completely irrelevant to task.
+Prompt Engineering,Major Misconceptions,1,Prompt is off-topic or misuses AI model syntax.
+Prompt Engineering,Nearly Proficient,2,Prompt is relevant but inefficient or overly verbose.
+Prompt Engineering,Proficient,3,Prompt is clear, efficient, and mostly aligned with task.
+Prompt Engineering,Mastery,4,Prompt is optimal, well-structured, and demonstrates advanced understanding.
+Output Quality,Missing,0,No output or unusable response.
+Output Quality,Major Misconceptions,1,Output misinterprets the prompt or is mostly incorrect.
+Output Quality,Nearly Proficient,2,Output addresses prompt but with noticeable flaws.
+Output Quality,Proficient,3,Output is accurate and mostly correct with minor issues.
+Output Quality,Mastery,4,Output is accurate, fluent, and comprehensive.
+Reflection Quality,Missing,0,No reflection or blank.
+Reflection Quality,Major Misconceptions,1,Reflection misunderstands task or output significance.
+Reflection Quality,Nearly Proficient,2,Reflection covers basics but lacks insight.
+Reflection Quality,Proficient,3,Reflection shows clear understanding of task and model output.
+Reflection Quality,Mastery,4,Reflection is thoughtful, deep, and insightful.

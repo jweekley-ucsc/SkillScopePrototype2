@@ -1,0 +1,208 @@
+from flask import Flask, request, jsonify, render_template, send_from_directory, redirect, url_for
+from flask_cors import CORS
+from datetime import datetime, timezone
+import json
+import os
+import traceback
+import logging
+
+app = Flask(__name__, static_url_path='/static', static_folder='static', template_folder='templates')
+CORS(app)
+
+# Set up logging
+log_dir = "instance/logs"
+os.makedirs(log_dir, exist_ok=True)
+log_file = os.path.join(log_dir, "skillscope.log")
+logging.basicConfig(filename=log_file, level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+@app.route("/")
+def home():
+    return redirect("/login")
+
+@app.route("/login")
+def login():
+    return render_template("login.html")
+
+@app.route("/interview")
+def interview():
+    return render_template("interview.html")
+
+@app.route("/interviewer")
+def interviewer():
+    return render_template("interviewer.html")
+
+@app.route("/evaluate")
+def evaluate():
+    return render_template("evaluate.html")
+
+@app.route("/submit-transcript", methods=["POST"])
+def submit_transcript():
+    data = request.get_json()
+    transcript = data.get("transcript")
+    email = data.get("email")
+    name = data.get("name")
+
+    if not transcript or not email:
+        return jsonify({"error": "Missing transcript or email"}), 400
+
+    entry = {
+        "name": name,
+        "email": email,
+        "transcript": transcript,
+        "submitted_at": datetime.now(timezone.utc).isoformat()
+    }
+
+    with open("instance/data/submissions.jsonl", "a") as f:
+        f.write(json.dumps(entry) + "\n")
+
+    return jsonify({"status": "ok"})
+
+@app.route("/submissions")
+def get_submissions():
+    try:
+        with open("instance/submissions/submissions.jsonl", "r") as f:
+            return jsonify([json.loads(line) for line in f if line.strip()])
+    except FileNotFoundError:
+        return jsonify([])
+    
+@app.route("/submit-evaluation", methods=["POST"])
+def submit_evaluation():
+    try:
+        package = request.get_json()
+        app.logger.info(f"\U0001F4E6 Received evaluation package: {json.dumps(package, indent=2)}")
+
+        rubric_path = package.get("rubric_path")
+        prompt_path = package.get("prompt_path")
+
+        # Load rubric
+        try:
+            with open(rubric_path, "r") as f:
+                rubric_csv = f.read()
+        except Exception as e:
+            app.logger.error(f"Error reading rubric file: {e}")
+            rubric_csv = "Prompt and rubric not recorded."
+
+        # Load prompt
+        try:
+            with open(prompt_path, "r") as f:
+                evaluation_prompt = f.read()
+        except Exception as e:
+            app.logger.error(f"Error reading prompt file: {e}")
+            evaluation_prompt = "Prompt and rubric not recorded."
+
+        # Compose final evaluation payload
+        evaluation_payload = {
+            "rubric_csv": rubric_csv,
+            "evaluation_prompt": evaluation_prompt,
+            "transcripts": package.get("transcripts", []),
+            "received_at": datetime.utcnow().isoformat()
+        }
+
+        # Log for verification
+        os.makedirs("instance/data", exist_ok=True)
+        with open("instance/data/llm_eval_requests.jsonl", "a") as f:
+            f.write(json.dumps(evaluation_payload) + "\n")
+
+        # Also log full submission for debugging
+        os.makedirs("instance/debug", exist_ok=True)
+        with open("instance/debug/llm_submission_debug.json", "w") as dbg:
+            json.dump(evaluation_payload, dbg, indent=2)
+
+        # Simulate evaluation result (replace with LLM call if desired)
+        result = {
+            "summary": "This is a placeholder response.",
+            "evaluations": [
+                {
+                    "skill": "Prompt Engineering",
+                    "level": "Missing",
+                    "score": 0,
+                    "description": "No prompt provided or completely irrelevant to task."
+                },
+                {
+                    "skill": "Output Quality",
+                    "level": "Missing",
+                    "score": 0,
+                    "description": "No output or unusable response."
+                },
+                {
+                    "skill": "Reflection Quality",
+                    "level": "Missing",
+                    "score": 0,
+                    "description": "No reflection or blank."
+                }
+            ],
+            "feedback": "The task was to evaluate the language of the transcript, but no evaluation was provided. The task also asked for a prompt, an output, and a reflection, none of which were provided. Please follow the instructions carefully and provide all necessary elements for the task."
+        }
+
+        email = evaluation_payload['transcripts'][0].get('email', 'unknown')
+        timestamp = datetime.utcnow().isoformat().replace(":", "-")
+        filename = f"llm_eval_responses_{email}_{timestamp}.jsonl"
+        response_path = os.path.join("instance/responses", filename)
+        os.makedirs("instance/responses", exist_ok=True)
+        with open(response_path, "w") as f:
+            f.write(json.dumps(result) + "\n")
+
+        return jsonify({"status": "success", "filename": filename})
+
+    except Exception as e:
+        tb = traceback.format_exc()
+        app.logger.error(f"Evaluation submission failed: {e}\n{tb}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+    
+    os.makedirs("instance/requests", exist_ok=True)
+    with open("instance/requests/llm_eval_requests.jsonl", "a") as f:
+        f.write(json.dumps(request_block) + "\n")
+
+    logging.info(f"📦 Received evaluation package: {json.dumps(data, indent=2)}")
+
+    return jsonify({"status": "ok"})
+
+@app.route("/evaluation-requests", methods=["GET"])
+def get_evaluation_requests():
+    try:
+        with open("instance/requests/llm_eval_requests.jsonl", "r") as f:
+            entries = []
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entries.append(json.loads(line))
+                except json.JSONDecodeError as e:
+                    app.logger.warning(f"Skipping malformed JSON: {e}")
+            return jsonify(entries)
+    except FileNotFoundError:
+        return jsonify([])
+    except Exception as e:
+        app.logger.error(f"Unexpected error loading requests: {e}")
+        return jsonify({"error": "Failed to load evaluation requests"}), 500
+
+@app.route("/download/<path:filename>")
+def download_file(filename):
+    directory = os.path.join(app.root_path, "instance", "responses")
+    return send_from_directory(directory, filename, as_attachment=True)
+
+@app.route("/list-evaluation-files")
+def list_evaluation_files():
+    eval_dir = os.path.join("instance", "responses")
+    if not os.path.exists(eval_dir):
+        return jsonify([])
+
+    files = [f for f in os.listdir(eval_dir) if f.endswith(".jsonl")]
+    return jsonify(files)
+@app.route("/get-evaluation-file")
+def get_evaluation_file():
+    filename = request.args.get("filename")
+    if not filename:
+        return "Filename required", 400
+
+    filepath = os.path.join("instance", "responses", filename)
+    if not os.path.exists(filepath):
+        return "File not found", 404
+
+    with open(filepath, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+if __name__ == "__main__":
+    app.run(port=5050, debug=True)

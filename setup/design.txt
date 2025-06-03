@@ -1,0 +1,19 @@
+Login page 
+email , name
+Participant instructions
+Start button launches new page (interview.html) and starts countdown timer to be displayed on the new page
+
+New Page (interview.html)
+Time is displayed prominently and also dynamically updates to the document.title to display countdown in browser tab
+Participant is able to see the problem There 1 hour timer has started (Visible Timer) 
+Recording should keep working even after tabs are switched 
+Timer showing on the tab name
+
+Can Live Transcription be an Option? 
+
+Button: "end assessment" stops the recording, sends the .webm blob to Whisper API
+Whisper API returns transcript for review (View Only) 
+They can add a note in "Notes" field (not submitted to LLM, but saved with the transcript?)
+"Submit" sends transcript, audio, notes and participan identifiers to shared drive location in a folder with a unique identifier (e.g.lastNameFirstName_DTG
+
+

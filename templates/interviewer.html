@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SkillScope Interviewer Interface</title>
+  <script src="/static/scripts/interviewer.js" defer></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 text-gray-900">
+  <main class="max-w-6xl mx-auto p-6">
+    <h1 class="text-3xl font-bold mb-6">SkillScope Interviewer Portal</h1>
+
+    <section class="mb-10">
+      <h2 class="text-2xl font-semibold mb-2">Upload Rubric</h2>
+      <input type="file" id="rubricUpload" accept=".csv" class="mb-2" />
+      <pre id="rubricPreview" class="bg-white p-3 rounded border h-48 overflow-auto"></pre>
+    </section>
+
+    <section class="mb-10">
+      <h2 class="text-2xl font-semibold mb-2">Upload Prompt</h2>
+      <input type="file" id="promptUpload" accept=".txt" class="mb-2" />
+      <pre id="promptPreview" class="bg-white p-3 rounded border h-48 overflow-auto"></pre>
+    </section>
+
+    <section class="mb-10">
+      <h2 class="text-2xl font-semibold mb-2">Submitted Transcripts</h2>
+      <ul id="submissionList" class="bg-white border rounded divide-y max-h-60 overflow-y-auto"></ul>
+    </section>
+
+    <section id="transcriptPanel" class="mb-10 hidden">
+      <h2 class="text-2xl font-semibold mb-2">Transcript Preview</h2>
+      <pre id="transcriptBox" class="bg-white p-3 rounded border h-48 overflow-auto"></pre>
+    </section>
+
+    <div class="flex gap-4">
+      <button id="submitSelected" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Submit Selected for Evaluation</button>
+      <button id="submitAll" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Submit All for Evaluation</button>
+    </div>
+  </main>
+</body>
+</html>
