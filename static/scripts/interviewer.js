@@ -5,30 +5,19 @@ document.addEventListener("DOMContentLoaded", () => {
   const submitEvalButton = document.getElementById("submitEvalButton");
   const evaluationSummary = document.getElementById("evaluationSummary");
 
-  let rubricCSV = "";
+  let selectedTranscript = null;
+  let parsedRubric = [];
 
-  function fetchTranscripts() {
-    fetch("/list-transcripts")
-      .then(res => res.json())
-      .then(files => {
-        transcriptList.innerHTML = "";
-        files.forEach(name => {
-          const li = document.createElement("li");
-          const checkbox = document.createElement("input");
-          checkbox.type = "checkbox";
-          checkbox.value = name;
-          li.appendChild(checkbox);
-          li.appendChild(document.createTextNode(" " + name));
-          transcriptList.appendChild(li);
-        });
-      });
+  // Renders the rubric to the preview window
+  function parseRubric(csvText) {
+    rubricPreview.textContent = csvText;
+    parsedRubric = csvText.trim().split("\n").slice(1).map(line => {
+      const [skill, level, score, description] = line.split(",");
+      return { skill, level, score: Number(score), description };
+    });
   }
 
-  function parseRubric(input) {
-    rubricCSV = input.trim();
-    rubricPreview.textContent = rubricCSV || "No rubric provided.";
-  }
-
+  // Upload handler for rubric
   rubricInput.addEventListener("change", () => {
     const file = rubricInput.files[0];
     if (file) {
@@ -38,28 +27,67 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  // Fetch and display list of transcripts
+  function fetchTranscripts() {
+    fetch("/transcripts")
+      .then(res => res.json())
+      .then(data => {
+        transcriptList.innerHTML = "";
+        if (!data.length) {
+          transcriptList.innerHTML = "<li>No transcripts available.</li>";
+          return;
+        }
+
+        data.forEach((entry, index) => {
+          const li = document.createElement("li");
+          li.className = "transcript-item";
+
+          const name = entry.name || "Unknown";
+          const ts = new Date(entry.submitted_at || entry.timestamp || Date.now());
+          const readableDate = ts.toLocaleString();
+
+          li.innerHTML = `<button class="transcript-btn" data-index="${index}">${name} – ${readableDate}</button>`;
+          li.querySelector("button").addEventListener("click", () => {
+            selectedTranscript = entry;
+            evaluationSummary.textContent = entry.transcript || "[No content]";
+          });
+
+          transcriptList.appendChild(li);
+        });
+      })
+      .catch(err => {
+        console.error("Transcript load error:", err);
+        transcriptList.innerHTML = "<li>Failed to load transcripts.</li>";
+      });
+  }
+
+  // Submission handler for evaluation
   submitEvalButton.addEventListener("click", () => {
-    const selected = Array.from(transcriptList.querySelectorAll("input[type='checkbox']:checked"))
-      .map(cb => cb.value);
-    if (!rubricCSV || selected.length === 0) {
-      alert("Please upload a rubric and select at least one transcript.");
+    if (!selectedTranscript || !parsedRubric.length) {
+      alert("Select a transcript and load a rubric before submitting.");
       return;
     }
 
-    fetch("/evaluate-transcripts", {
+    fetch("/evaluate-transcript", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rubric: rubricCSV, transcripts: selected })
+      body: JSON.stringify({
+        rubric: parsedRubric,
+        transcript: selectedTranscript.transcript,
+        email: selectedTranscript.email || "unknown",
+        name: selectedTranscript.name || "unknown"
+      })
     })
     .then(res => res.json())
     .then(data => {
-      if (data.success) {
-        evaluationSummary.textContent = "Evaluation submitted successfully.";
-      } else {
-        evaluationSummary.textContent = "Evaluation failed.";
-      }
+      evaluationSummary.textContent = data.result || "Evaluation complete, but no result returned.";
+    })
+    .catch(err => {
+      console.error("Evaluation submission failed:", err);
+      evaluationSummary.textContent = "Failed to submit for evaluation.";
     });
   });
 
+  // Trigger initial fetch
   fetchTranscripts();
 });
