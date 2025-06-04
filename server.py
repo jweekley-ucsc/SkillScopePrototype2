@@ -20,7 +20,8 @@ os.makedirs(TRANSCRIPT_FOLDER, exist_ok=True)
 os.makedirs(RESPONSE_FOLDER, exist_ok=True)
 os.makedirs(DATA_FOLDER, exist_ok=True)
 
-app = Flask(__name__)
+app = Flask(__name__, static_url_path='/static')
+
 CORS(app)
 
 @app.route("/")
