@@ -130,10 +130,46 @@ def submit_transcript():
 
     return jsonify({"success": True})
 
+@app.route("/submit-evaluation", methods=["POST"])
+def submit_evaluation():
+    try:
+        data = request.get_json()
+        rubric = data.get("rubric")
+        transcript_files = data.get("transcripts", [])
+        response_records = []
+
+        rubric_csv_path = os.path.join("instance", "rubrics", f"rubric_{uuid.uuid4()}.csv")
+        os.makedirs(os.path.dirname(rubric_csv_path), exist_ok=True)
+        with open(rubric_csv_path, "w") as f:
+            f.write(rubric)
+
+        from backend.llm_assess_interviews import run_batch_evaluation  # make sure path/module matches
+
+        transcript_paths = [
+            os.path.join("instance", "transcripts", fname) for fname in transcript_files
+        ]
+
+        eval_output = run_batch_evaluation(rubric_csv_path, transcript_paths)
+
+        return jsonify({"success": True, "evaluated": len(eval_output)})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/list-evaluation-files")
 def list_evaluation_files():
     files = [f for f in os.listdir(RESPONSE_FOLDER) if f.endswith(".jsonl")]
     return jsonify({"files": files})
+
+@app.route("/list-transcripts")
+def list_transcripts():
+    transcript_dir = os.path.join("instance", "transcripts")
+    if not os.path.exists(transcript_dir):
+        return jsonify({"error": "Transcript directory not found."}), 404
+    files = [f for f in os.listdir(transcript_dir) if f.endswith(".json")]
+    return jsonify(files)
+
 
 @app.route("/get-evaluation-file")
 def get_evaluation_file():

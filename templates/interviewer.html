@@ -1,32 +1,41 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Interview Session</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-
+  <meta charset="UTF-8">
+  <title>SkillScope: Interviewer Dashboard</title>
+  <link rel="stylesheet" href="/static/css/style.css">
 </head>
-<body class="font-sans bg-gray-50 text-gray-900">
-  <div class="max-w-4xl mx-auto p-4">
-    <h1 class="text-3xl font-bold mb-4">Interview Session</h1>
-    <div class="mb-4">
-      <p><strong>Session Time Remaining:</strong> <span id="countdown">60:00</span></p>
-    </div>
-    <div class="mb-4">
-      <button id="startRecording" class="bg-green-500 text-white px-4 py-2 rounded">Start Recording</button>
-      <button id="stopRecording" class="bg-red-500 text-white px-4 py-2 rounded" disabled>Stop Recording</button>
-    </div>
-    <div class="mb-4">
-      <label class="block mb-2 font-semibold">Transcript Preview:</label>
-      <pre id="transcriptPreview" class="bg-white border rounded p-2 h-40 overflow-y-auto whitespace-pre-wrap" readonly></pre>
-    </div>
-    <div class="mb-4">
-      <label for="reflection" class="block mb-2 font-semibold">Reflection:</label>
-      <textarea id="reflection" class="w-full border p-2 rounded" rows="5" placeholder="Add your reflections here..."></textarea>
-    </div>
-    <button id="submitTranscript" class="bg-blue-500 text-white px-4 py-2 rounded" disabled>Submit Transcript</button>
-  </div>
-  <script src="/static/scripts/interview.js"></script>
+<body>
+  <main class="container">
+    <h1>Interviewer Evaluation Panel</h1>
+
+    <!-- Rubric Upload Section -->
+    <section class="rubric-section">
+      <h2>1. Upload or Select a Rubric</h2>
+      <input type="file" id="rubricInput" accept=".csv">
+      <button id="submitRubricBtn">Submit Rubric</button>
+    </section>
+
+    <!-- Rubric Preview -->
+    <section class="rubric-preview">
+      <h2>Rubric Preview</h2>
+      <pre id="rubricPreview">No rubric loaded.</pre>
+    </section>
+
+    <!-- Transcripts and Evaluation -->
+    <section class="evaluation-section">
+      <h2>2. Evaluate Transcripts</h2>
+      <ul id="transcriptList">Loading transcripts...</ul>
+      <button id="submitEvalButton">Submit Selected for Evaluation</button>
+    </section>
+
+    <!-- Evaluation Output -->
+    <section class="evaluation-output">
+      <h2>Evaluation Summary</h2>
+      <pre id="evaluationSummary"></pre>
+    </section>
+  </main>
+
+  <script src="/static/scripts/interviewer.js"></script>
 </body>
 </html>
