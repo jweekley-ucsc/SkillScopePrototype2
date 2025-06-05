@@ -155,22 +155,11 @@ def submit_rubric():
     return jsonify({"success": True})
 
 
-@app.route("/list-transcripts", methods=["GET"])
 def list_transcripts():
     try:
         files = os.listdir(TRANSCRIPT_FOLDER)
         json_files = [f for f in files if f.endswith(".json") or f.endswith(".jsonl")]
         return jsonify(json_files)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/transcripts", methods=["GET"])
-def get_transcripts():
-    transcript_dir = os.path.join("instance", "transcripts")
-    try:
-        files = os.listdir(transcript_dir)
-        return jsonify([f for f in files if f.endswith(".json") or f.endswith(".jsonl")])
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -208,6 +197,30 @@ def evaluate_transcripts():
         return jsonify(summaries)
 
     except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
+    
+@app.route("/transcripts", methods=["GET"])
+def list_transcripts():
+    transcripts_path = os.path.join("instance", "transcripts", "transcripts.jsonl")
+    results = []
+    try:
+        with open(transcripts_path, "r") as f:
+            for idx, line in enumerate(f, start=1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                    results.append(record)
+                except json.JSONDecodeError as e:
+                    print(f"[ERROR] Invalid JSON at line {idx}: {e}")
+        print(f"[DEBUG] Returning {len(results)} parsed transcript records.")
+        return jsonify(results)
+    except Exception as e:
+        print(f"[ERROR] Failed to load transcripts: {e}")
         return jsonify({"error": str(e)}), 500
 
 

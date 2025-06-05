@@ -8,7 +8,6 @@ document.addEventListener("DOMContentLoaded", () => {
   let selectedTranscript = null;
   let parsedRubric = [];
 
-  // Renders the rubric to the preview window
   function parseRubric(csvText) {
     rubricPreview.textContent = csvText;
     parsedRubric = csvText.trim().split("\n").slice(1).map(line => {
@@ -17,7 +16,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Upload handler for rubric
   rubricInput.addEventListener("change", () => {
     const file = rubricInput.files[0];
     if (file) {
@@ -27,41 +25,52 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Fetch and display list of transcripts
   function fetchTranscripts() {
-    fetch("/transcripts")
-      .then(res => res.json())
-      .then(data => {
-        transcriptList.innerHTML = "";
-        if (!data.length) {
-          transcriptList.innerHTML = "<li>No transcripts available.</li>";
-          return;
-        }
+  fetch("/transcripts")
+    .then(response => {
+      if (!response.ok) throw new Error("Failed to fetch transcripts.");
+      return response.json();
+    })
+    .then(data => {
+      console.log("[DEBUG] Raw transcript data received:", data);
 
-        data.forEach((entry, index) => {
-          const li = document.createElement("li");
-          li.className = "transcript-item";
+      const transcriptList = document.getElementById("transcriptList");
+      transcriptList.innerHTML = "";
 
-          const name = entry.name || "Unknown";
-          const ts = new Date(entry.submitted_at || entry.timestamp || Date.now());
-          const readableDate = ts.toLocaleString();
+      if (!Array.isArray(data) || data.length === 0) {
+        console.warn("[DEBUG] No valid transcripts found.");
+        transcriptList.innerHTML = "<li>No transcripts available.</li>";
+        return;
+      }
 
-          li.innerHTML = `<button class="transcript-btn" data-index="${index}">${name} – ${readableDate}</button>`;
-          li.querySelector("button").addEventListener("click", () => {
-            selectedTranscript = entry;
-            evaluationSummary.textContent = entry.transcript || "[No content]";
-          });
+      data.forEach((item, index) => {
+        const name = item.name || "Unknown";
+        const submittedAt = item.submitted_at ? new Date(item.submitted_at) : null;
+        const formattedTime = submittedAt ? submittedAt.toLocaleString("en-US", {
+          month: "short", day: "numeric", year: "numeric",
+          hour: "2-digit", minute: "2-digit", hour12: true
+        }) : "[no time]";
 
-          transcriptList.appendChild(li);
+        console.log(`[DEBUG] Processing transcript ${index + 1}:`, name, formattedTime);
+
+        const li = document.createElement("li");
+        const button = document.createElement("button");
+        button.textContent = `${name} – ${formattedTime}`;
+        button.className = "transcript-button";
+        button.addEventListener("click", () => {
+          console.log("[DEBUG] Transcript selected:", item);
+          displayTranscript(item);
         });
-      })
-      .catch(err => {
-        console.error("Transcript load error:", err);
-        transcriptList.innerHTML = "<li>Failed to load transcripts.</li>";
-      });
-  }
 
-  // Submission handler for evaluation
+        li.appendChild(button);
+        transcriptList.appendChild(li);
+      });
+    })
+    .catch(error => {
+      console.error("[ERROR] Failed to load transcripts:", error);
+    });
+}
+
   submitEvalButton.addEventListener("click", () => {
     if (!selectedTranscript || !parsedRubric.length) {
       alert("Select a transcript and load a rubric before submitting.");
@@ -74,20 +83,19 @@ document.addEventListener("DOMContentLoaded", () => {
       body: JSON.stringify({
         rubric: parsedRubric,
         transcript: selectedTranscript.transcript,
-        email: selectedTranscript.email || "unknown",
-        name: selectedTranscript.name || "unknown"
+        name: selectedTranscript.name || "Unknown",
+        email: selectedTranscript.email || "Unknown"
       })
     })
-    .then(res => res.json())
-    .then(data => {
-      evaluationSummary.textContent = data.result || "Evaluation complete, but no result returned.";
-    })
-    .catch(err => {
-      console.error("Evaluation submission failed:", err);
-      evaluationSummary.textContent = "Failed to submit for evaluation.";
-    });
+      .then(res => res.json())
+      .then(data => {
+        evaluationSummary.textContent = data.result || "Evaluation complete, but no result returned.";
+      })
+      .catch(err => {
+        console.error("Evaluation submission failed:", err);
+        evaluationSummary.textContent = "Failed to submit for evaluation.";
+      });
   });
 
-  // Trigger initial fetch
   fetchTranscripts();
 });
