@@ -1,0 +1,221 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>SkillScope – Rendered</title>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true });
+  </script>
+  <style>
+    body { font-family: sans-serif; margin: 2em; line-height: 1.6; }
+    pre, code { background: #f3f3f3; padding: 0.5em; border-radius: 5px; }
+    .mermaid { margin: 1em 0; }
+  </style>
+</head>
+<body>
+  <h1>Summary of Technical Contributions – SkillScope Prototype 2</h1>
+
+<p><strong>Author:</strong> Jeffrey Weekley<br />
+<strong>Role:</strong> Primary Full-stack Developer, Designer, and Technical Implementation Lead<br />
+<strong>Project:</strong> SkillScope Prototype 2 – Full-Stack AI-Powered Interview Evaluation System<br />
+<strong>Duration:</strong> Spring 2025  </p>
+
+<hr />
+
+<h2>Overview</h2>
+
+<p>SkillScope is a full-stack web application designed to support asynchronous voice-based interviews with AI-powered evaluation using OpenAI's LLMs. The system provides both student-facing and interviewer-facing workflows, emphasizing accessibility, automation, and pedagogical transparency.</p>
+
+<p>This prototype demonstrates the feasibility of AI-assisted formative assessments for higher education using recorded talk-aloud interviews and rubric-based evaluations.</p>
+
+<p><strong>Project Repository:</strong>
+<a href="https://github.com/jweekley-ucsc/SkillScopePrototype2.git" target="_blank">
+https://github.com/jweekley-ucsc/SkillScopePrototype2.git
+</a></p>
+
+<hr />
+
+<h2>Technical Contributions</h2>
+
+<h3>1. Interactive Web Application</h3>
+
+<ul>
+<li>Designed and implemented a multi-page web interface using HTML, CSS, and JavaScript.</li>
+<li>Pages include:
+<ul>
+<li><code>index.html</code>: Entry point and site navigation</li>
+<li><code>login.html</code>: Entry point for interviewees</li>
+<li><code>interview.html</code>: Audio recording and transcript preview for students</li>
+<li><code>interviewer.html</code>: Rubric upload, transcript selection, and evaluation interface</li>
+<li><code>admin.html</code>: Placeholder for future system admin functionality</li>
+</ul></li>
+<li>Custom JavaScript modules (<code>interview.js</code>, <code>interviewer.js</code>, <code>admin.js</code>) provide client-side logic.</li>
+</ul>
+
+<h4>Site Structure Map</h4>
+
+<div class="mermaid">
+graph TD
+  A[index.html] --> B[login.html]
+  B --> C[interview.html]
+  A --> D[interviewer.html]
+  A --> E[evaluate.html]
+  A --> F[admin.html]
+</div>
+
+<hr />
+
+<h3>2. Custom Recording and Transcription Pipeline</h3>
+
+<ul>
+<li>Integrated OpenAI Whisper API for client-initiated audio transcription.</li>
+<li>Implemented a countdown timer, transcript preview, and single-submission enforcement for students.</li>
+<li>Audio recordings saved as <code>.webm</code> files and paired with metadata in <code>.json</code>.</li>
+<li>Created preview and review stages for students to check transcripts before submission.</li>
+</ul>
+
+<h4>Interviewee Interaction Diagram</h4>
+
+<p><img src="StudentIntervieweeProcessFlowDiagram.png" alt="Interviewee Process Flow" width="45%"/>
+<img src="InterviewerProcessFlowDiagram.png" alt="Interviewer Process Flow" width="45%"/></p>
+
+<h4>Component and Event Architecture (graphTD)</h4>
+
+<div class="mermaid">
+graph TD
+
+%% ===== UI Pages =====
+subgraph UI_Pages
+  A1[index.html]
+  A2[login.html]
+  A3[interview.html]
+  A4[interviewer.html]
+  A5[evaluate.html]
+end
+
+%% ===== JavaScript Functions =====
+subgraph JS_Functions
+  J1["startRecording"]
+  J2["stopRecording"]
+  J3["parseRubric"]
+  J4["fetchTranscripts"]
+  J5["displayTranscript"]
+  J6["submitSelectedTranscripts"]
+  J7["selectAllTranscripts"]
+end
+
+%% ===== Flask Routes =====
+subgraph Flask_Routes
+  F1["GET /"]
+  F2["GET /transcripts"]
+  F3["POST /evaluate-transcript"]
+  F4["POST /upload-audio"]
+  F5["POST /transcribe"]
+end
+
+%% ===== Data Assets =====
+subgraph Data_Storage
+  D1[transcripts.jsonl]
+  D2[test_rubric.csv]
+  D3[uploaded_audio/*.webm]
+  D4[.env API Key]
+end
+
+%% ===== Page Navigation =====
+A1 --> A2
+A1 --> A4
+A1 --> A5
+A2 --> A3
+A4 --> A5
+
+%% ===== Frontend-Backend Interactions =====
+A3 --> J1
+A3 --> J2
+A4 --> J3
+A4 --> J4
+A4 --> J5
+A4 --> J6
+A4 --> J7
+
+J4 --> F2
+J6 --> F3
+J1 --> F4
+J2 --> F5
+J3 --> D2
+F2 --> D1
+F3 --> D4
+F4 --> D3
+F5 --> D3
+</div>
+
+<hr />
+
+<h3>3. Evaluation Workflow for Interviewers</h3>
+
+<ul>
+<li>Implemented multi-transcript selection with dynamic preview panel.</li>
+<li>Built state-tracking system for selected transcripts with toggling, color indicators, and deselection.</li>
+<li>Connected to OpenAI’s Chat API for rubric-based evaluation of multiple transcripts.</li>
+<li>Evaluation results are logged and displayed, with logic to prevent duplicate submissions.</li>
+</ul>
+
+<hr />
+
+<h3>4. Rubric Integration and Session Management</h3>
+
+<ul>
+<li>Rubrics are uploaded in <code>.csv</code> format and stored in Flask <code>instance/</code> path.</li>
+<li>The latest rubric persists during session and is included with all evaluations.</li>
+<li>Removed redundant "Submit Rubric" button after implementing auto-preview and in-memory state management.</li>
+</ul>
+
+<hr />
+
+<h3>5. Flask Server and Secure Routing</h3>
+
+<ul>
+<li>Built a robust Flask backend with routes for:
+<ul>
+<li><code>/upload</code>, <code>/submit-transcript</code>, <code>/transcripts</code>, <code>/evaluate-transcript</code>, etc.</li>
+</ul></li>
+<li>All audio and transcript files stored securely in <code>/instance/</code> and <code>/uploaded_audio/</code>.</li>
+<li>Used secure filenames, exception handling, and status code responses.</li>
+<li><code>.env</code> file stores OpenAI API key and system secrets.</li>
+</ul>
+
+<hr />
+
+<h3>6. Evaluation Logic and LLM Assessment Module</h3>
+
+<ul>
+<li>Authored <code>llm_assess_interviews.py</code> to modularize the LLM evaluation logic.</li>
+<li>Receives transcript and rubric, formulates structured GPT-4 prompt, and parses the returned assessment.</li>
+<li>Supports multiple performance dimensions and categorical output parsing.</li>
+</ul>
+
+<hr />
+
+<h3>7. Process Mapping and Accessibility Design</h3>
+
+<ul>
+<li>Defined interviewer and interviewee flows using accessibility-informed principles.</li>
+<li>Ensured contrast ratios, font sizing, and semantic HTML for W3C compliance.</li>
+<li>Used Mermaid and visual diagrams for planning and documentation.</li>
+</ul>
+
+<hr />
+
+<h2>Future Work</h2>
+
+<ul>
+<li>Admin panel to manage transcripts, users, and evaluation tracking.</li>
+<li>Integration of persistent session and identity tracking.</li>
+<li>User-specific history, rollback support, and rubric versioning.</li>
+</ul>
+
+<hr />
+
+</body>
+</html>
