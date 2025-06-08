@@ -4,16 +4,73 @@ document.addEventListener("DOMContentLoaded", () => {
   const transcriptList = document.getElementById("transcriptList");
   const submitEvalButton = document.getElementById("submitEvalButton");
   const evaluationSummary = document.getElementById("evaluationSummary");
+  const transcriptPreview = document.getElementById("transcriptPreview");
+  const selectAllBtn = document.getElementById("selectAllBtn");
 
-  let selectedTranscript = null;
-  let parsedRubric = [];
+  let rubricCSV = "";
+  const selectedTranscripts = new Set();
+  let allTranscripts = [];
 
-  function parseRubric(csvText) {
-    rubricPreview.textContent = csvText;
-    parsedRubric = csvText.trim().split("\n").slice(1).map(line => {
-      const [skill, level, score, description] = line.split(",");
-      return { skill, level, score: Number(score), description };
-    });
+  function fetchTranscripts() {
+    fetch("/transcripts")
+      .then(res => res.json())
+      .then(data => {
+        allTranscripts = data;
+        transcriptList.innerHTML = "";
+
+        data.forEach((entry, index) => {
+          const name = entry.name || "Unknown";
+          const time = entry.submitted_at || entry.timestamp || "no time";
+          const label = `${name} – ${new Date(time).toLocaleString()}`;
+
+          const btn = document.createElement("button");
+          btn.className = "transcript-button";
+          btn.textContent = label;
+          btn.dataset.index = index;
+
+          btn.addEventListener("click", () => {
+            const key = JSON.stringify(entry);
+            const isSelected = selectedTranscripts.has(key);
+
+            if (isSelected) {
+              selectedTranscripts.delete(key);
+              btn.classList.remove("selected");
+              btn.style.backgroundColor = "";
+            } else {
+              selectedTranscripts.add(key);
+              btn.classList.add("selected");
+              btn.style.backgroundColor = "#1e7f3c"; // dark green
+              btn.style.color = "#fff";
+            }
+
+            updateTranscriptPreview();
+          });
+
+          transcriptList.appendChild(btn);
+        });
+      })
+      .catch(err => {
+        transcriptList.innerHTML = "Failed to load transcripts.";
+        console.error("Transcript load error:", err);
+      });
+  }
+
+  function updateTranscriptPreview() {
+    const selectedArray = Array.from(selectedTranscripts).map(x => JSON.parse(x));
+
+    if (selectedArray.length === 1) {
+      const t = selectedArray[0];
+      transcriptPreview.textContent = `[${t.name} – ${t.submitted_at}]\n\n${t.transcript}`;
+    } else if (selectedArray.length > 1) {
+      transcriptPreview.textContent = selectedArray.map(t => `${t.name} – ${t.submitted_at}`).join("\n");
+    } else {
+      transcriptPreview.textContent = "No transcript selected.";
+    }
+  }
+
+  function parseRubric(input) {
+    rubricCSV = input.trim();
+    rubricPreview.textContent = rubricCSV || "No rubric provided.";
   }
 
   rubricInput.addEventListener("change", () => {
@@ -25,76 +82,53 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  function fetchTranscripts() {
-  fetch("/transcripts")
-    .then(response => {
-      if (!response.ok) throw new Error("Failed to fetch transcripts.");
-      return response.json();
-    })
-    .then(data => {
-      console.log("[DEBUG] Raw transcript data received:", data);
-
-      const transcriptList = document.getElementById("transcriptList");
-      transcriptList.innerHTML = "";
-
-      if (!Array.isArray(data) || data.length === 0) {
-        console.warn("[DEBUG] No valid transcripts found.");
-        transcriptList.innerHTML = "<li>No transcripts available.</li>";
-        return;
-      }
-
-      data.forEach((item, index) => {
-        const name = item.name || "Unknown";
-        const submittedAt = item.submitted_at ? new Date(item.submitted_at) : null;
-        const formattedTime = submittedAt ? submittedAt.toLocaleString("en-US", {
-          month: "short", day: "numeric", year: "numeric",
-          hour: "2-digit", minute: "2-digit", hour12: true
-        }) : "[no time]";
-
-        console.log(`[DEBUG] Processing transcript ${index + 1}:`, name, formattedTime);
-
-        const li = document.createElement("li");
-        const button = document.createElement("button");
-        button.textContent = `${name} – ${formattedTime}`;
-        button.className = "transcript-button";
-        button.addEventListener("click", () => {
-          console.log("[DEBUG] Transcript selected:", item);
-          displayTranscript(item);
-        });
-
-        li.appendChild(button);
-        transcriptList.appendChild(li);
-      });
-    })
-    .catch(error => {
-      console.error("[ERROR] Failed to load transcripts:", error);
-    });
-}
-
   submitEvalButton.addEventListener("click", () => {
-    if (!selectedTranscript || !parsedRubric.length) {
-      alert("Select a transcript and load a rubric before submitting.");
+    if (!rubricCSV || selectedTranscripts.size === 0) {
+      alert("Please upload a rubric and select at least one transcript.");
       return;
     }
+
+    const payload = Array.from(selectedTranscripts).map(x => JSON.parse(x)).map(entry => ({
+      name: entry.name || "Unknown",
+      email: entry.email || "unknown@none.edu",
+      transcript: entry.transcript,
+      submitted_at: entry.submitted_at || entry.timestamp || "unknown"
+    }));
 
     fetch("/evaluate-transcript", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        rubric: parsedRubric,
-        transcript: selectedTranscript.transcript,
-        name: selectedTranscript.name || "Unknown",
-        email: selectedTranscript.email || "Unknown"
-      })
+      body: JSON.stringify({ rubric: rubricCSV, transcripts: payload })
     })
-      .then(res => res.json())
-      .then(data => {
-        evaluationSummary.textContent = data.result || "Evaluation complete, but no result returned.";
-      })
-      .catch(err => {
-        console.error("Evaluation submission failed:", err);
-        evaluationSummary.textContent = "Failed to submit for evaluation.";
-      });
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        evaluationSummary.textContent = data.result || "Submitted successfully.";
+        selectedTranscripts.clear();
+        fetchTranscripts();
+        updateTranscriptPreview();
+      } else {
+        evaluationSummary.textContent = "Evaluation failed: " + (data.error || "Unknown error");
+      }
+    })
+    .catch(err => {
+      evaluationSummary.textContent = "Evaluation request failed.";
+      console.error("Evaluation submission error:", err);
+    });
+  });
+
+  selectAllBtn.addEventListener("click", () => {
+    selectedTranscripts.clear();
+    const buttons = document.querySelectorAll(".transcript-button");
+    buttons.forEach((btn, index) => {
+      const entry = allTranscripts[index];
+      const key = JSON.stringify(entry);
+      selectedTranscripts.add(key);
+      btn.classList.add("selected");
+      btn.style.backgroundColor = "#1e7f3c";
+      btn.style.color = "#fff";
+    });
+    updateTranscriptPreview();
   });
 
   fetchTranscripts();

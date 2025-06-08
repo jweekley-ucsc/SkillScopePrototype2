@@ -11,9 +11,8 @@
 
     <!-- Rubric Upload Section -->
     <section class="rubric-section">
-      <h2>1. Upload or Select a Rubric</h2>
-      <input type="file" id="rubricInput" accept=".csv">
-      <button id="submitRubricBtn">Submit Rubric</button>
+      <h2>1. Upload a Rubric</h2>
+      <input type="file" id="rubricInput" accept=".csv" />
     </section>
 
     <!-- Rubric Preview -->
@@ -26,13 +25,20 @@
     <section class="evaluation-section">
       <h2>2. Evaluate Transcripts</h2>
       <ul id="transcriptList">Loading transcripts...</ul>
+      <button id="selectAllBtn">Select All</button>
       <button id="submitEvalButton">Submit Selected for Evaluation</button>
     </section>
 
     <!-- Evaluation Output -->
     <section class="evaluation-output">
       <h2>Evaluation Summary</h2>
-      <pre id="evaluationSummary"></pre>
+      <pre id="evaluationSummary">[No content]</pre>
+    </section>
+
+    <!-- Transcript Preview -->
+    <section class="transcript-preview">
+      <h2>Transcript Preview</h2>
+      <pre id="transcriptPreview">No transcript selected.</pre>
     </section>
   </main>
 

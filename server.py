@@ -32,12 +32,16 @@ def login():
     return send_from_directory("templates", "login.html")
 
 
+@app.route("/home")
+def home():
+    return send_from_directory("templates", "index.html")
+
+
 @app.route("/register", methods=["POST"])
 def register():
     data = request.get_json()
     email = data.get("email")
     name = data.get("name")
-    # No actual DB validation — assume frontend enforces uniqueness
     return jsonify({"success": True})
 
 
@@ -46,75 +50,9 @@ def interview():
     return send_from_directory("templates", "interview.html")
 
 
-@app.route("/upload-audio", methods=["POST"])
-def upload_audio():
-    if "audio" not in request.files:
-        return jsonify({"error": "No audio file provided"}), 400
-
-    audio = request.files["audio"]
-    filename = secure_filename(request.form.get("filename", "recording.webm"))
-    audio.save(os.path.join(UPLOAD_FOLDER, filename))
-    return jsonify({"success": True})
-
-
-@app.route("/transcribe")
-def transcribe():
-    session_id = request.args.get("session_id")
-    if not session_id:
-        return jsonify({"error": "Missing session_id"}), 400
-
-    audio_path = os.path.join(UPLOAD_FOLDER, f"{session_id}.webm")
-    if not os.path.exists(audio_path):
-        return jsonify({"error": "Audio file not found"}), 404
-
-    try:
-        audio_file = open(audio_path, "rb")
-        transcript = openai.audio.transcriptions.create(
-            model="whisper-1",
-            file=audio_file,
-            response_format="json"
-        )
-        transcript_text = transcript.get("text", "")
-
-        # Save to disk
-        transcript_record = {
-            "session_id": session_id,
-            "transcript": transcript_text
-        }
-        output_path = os.path.join(TRANSCRIPT_FOLDER, f"{session_id}.json")
-        with open(output_path, "w") as f:
-            json.dump(transcript_record, f, indent=2)
-
-        return jsonify(transcript_record)
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/submit-transcript", methods=["POST"])
-def submit_transcript():
-    try:
-        data = request.get_json()
-        email = data.get("email", "unknown")
-        transcript = data.get("transcript", "")
-        reflection = data.get("reflection", "")
-        if not transcript:
-            return jsonify({"error": "Missing transcript"}), 400
-
-        record = {
-            "email": email,
-            "transcript": transcript,
-            "reflection": reflection
-        }
-        filename = f"{email.replace('@', '_').replace('.', '_')}_{uuid.uuid4().hex[:8]}.jsonl"
-        path = os.path.join(TRANSCRIPT_FOLDER, filename)
-
-        with open(path, "w") as f:
-            f.write(json.dumps(record) + "\n")
-
-        return jsonify({"success": True})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+@app.route("/interviewer")
+def interviewer():
+    return send_from_directory("templates", "interviewer.html")
 
 
 @app.route("/evaluate")
@@ -122,102 +60,76 @@ def evaluate():
     return send_from_directory("templates", "evaluate.html")
 
 
-@app.route("/submit-evaluation", methods=["POST"])
-def submit_evaluation():
+@app.route("/upload-audio", methods=["POST"])
+def upload_audio():
+    if "audio" not in request.files:
+        return jsonify({"error": "No audio file provided"}), 400
+    audio = request.files["audio"]
+    filename = secure_filename(audio.filename)
+    save_path = os.path.join(UPLOAD_FOLDER, filename)
+    audio.save(save_path)
+    return jsonify({"success": True, "filename": filename})
+
+
+@app.route("/transcribe", methods=["POST"])
+def transcribe():
     try:
         data = request.get_json()
-        email = data.get("email", "unknown")
-        results = data.get("results", [])
-        filename = f"llm_eval_responses_{email.replace('@', '_')}_{uuid.uuid4().hex[:6]}.jsonl"
-        path = os.path.join(EVALUATION_FOLDER, filename)
+        filename = data.get("filename")
+        if not filename:
+            return jsonify({"error": "No filename provided"}), 400
 
-        with open(path, "w") as f:
-            for item in results:
-                f.write(json.dumps(item) + "\n")
+        path = os.path.join(UPLOAD_FOLDER, filename)
+        with open(path, "rb") as audio_file:
+            transcript = openai.Audio.transcribe("whisper-1", audio_file)
 
-        return jsonify({"success": True})
+        # Save to JSON
+        transcript_data = {
+            "filename": filename,
+            "email": data.get("email"),
+            "name": data.get("name"),
+            "transcript": transcript["text"],
+            "timestamp": data.get("timestamp")
+        }
+
+        json_path = os.path.join(TRANSCRIPT_FOLDER, filename.replace(".webm", ".json"))
+        with open(json_path, "w") as f:
+            json.dump(transcript_data, f, indent=2)
+
+        return jsonify({"success": True, "transcript": transcript["text"]})
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/interviewer")
-def interviewer():
-    return send_from_directory("templates", "interviewer.html")
+@app.route("/evaluate-transcript", methods=["POST"])
+def evaluate_transcript():
+    from backend.llm_assess_interviews import evaluate_single_transcript
 
+    payload = request.get_json()
+    transcript_text = payload.get("transcript")
+    rubric_csv = payload.get("rubric")
 
-@app.route("/submit-rubric", methods=["POST"])
-def submit_rubric():
-    if "rubric" not in request.files:
-        return jsonify({"error": "No rubric file provided"}), 400
-    rubric = request.files["rubric"]
-    filename = secure_filename(rubric.filename)
-    rubric.save(os.path.join(RUBRIC_FOLDER, filename))
-    return jsonify({"success": True})
+    if not rubric_csv or not transcript_text:
+        return jsonify({"error": "Missing rubric or transcript"}), 400
 
-
-def list_transcripts():
     try:
-        files = os.listdir(TRANSCRIPT_FOLDER)
-        json_files = [f for f in files if f.endswith(".json") or f.endswith(".jsonl")]
-        return jsonify(json_files)
+        result = evaluate_single_transcript(transcript_text, rubric_csv)
+        return jsonify({"success": True, "result": result})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
-@app.route("/evaluate-transcripts", methods=["POST"])
-def evaluate_transcripts():
-    try:
-        rubric_path = os.path.join(RUBRIC_FOLDER, "test_rubric.csv")
-        if not os.path.exists(rubric_path):
-            return jsonify({"error": "Rubric file not found."}), 400
-
-        with open(rubric_path, "r") as rf:
-            rubric = rf.read()
-
-        selected_files = request.json.get("selectedFiles", [])
-        summaries = []
-
-        for filename in selected_files:
-            path = os.path.join(TRANSCRIPT_FOLDER, filename)
-            with open(path, "r") as tf:
-                data = json.load(tf)
-                transcript = data.get("transcript", "")
-                response = openai.chat.completions.create(
-                    model="gpt-4",
-                    messages=[
-                        {"role": "system", "content": "You are an AI evaluator scoring transcripts."},
-                        {"role": "user", "content": f"Rubric:\n{rubric}\n\nTranscript:\n{transcript}"}
-                    ]
-                )
-                summaries.append({
-                    "file": filename,
-                    "feedback": response.choices[0].message.content
-                })
-
-        return jsonify(summaries)
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-
-    
 @app.route("/transcripts", methods=["GET"])
 def list_transcripts():
     transcripts_path = os.path.join("instance", "transcripts", "transcripts.jsonl")
     results = []
     try:
         with open(transcripts_path, "r") as f:
-            for idx, line in enumerate(f, start=1):
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    record = json.loads(line)
-                    results.append(record)
-                except json.JSONDecodeError as e:
-                    print(f"[ERROR] Invalid JSON at line {idx}: {e}")
-        print(f"[DEBUG] Returning {len(results)} parsed transcript records.")
+            for line in f:
+                if line.strip():
+                    data = json.loads(line)
+                    results.append(data)
         return jsonify(results)
     except Exception as e:
         print(f"[ERROR] Failed to load transcripts: {e}")

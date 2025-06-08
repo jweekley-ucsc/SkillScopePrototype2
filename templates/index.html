@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>SkillScope Navigation</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background-color: #f8f8f8;
+      padding: 2rem;
+      text-align: center;
+    }
+
+    h1 {
+      color: #00457c;
+      font-size: 2rem;
+    }
+
+    p {
+      max-width: 600px;
+      margin: 1rem auto 2rem;
+      font-size: 1.1rem;
+      color: #222;
+    }
+
+    .button-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      max-width: 300px;
+      margin: auto;
+    }
+
+    .nav-button {
+      background-color: #0057a8;
+      color: #fff;
+      padding: 0.75rem 1.25rem;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      cursor: pointer;
+      width: 100%;
+      text-decoration: none;
+      transition: background-color 0.2s ease;
+    }
+
+    .nav-button:hover {
+      background-color: #004080;
+    }
+
+    .disabled-button {
+      background-color: #ccc;
+      color: #666;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <h1><strong>SkillScope Interview System</strong></h1>
+  <p>
+    SkillScope is a voice-based, AI-assisted platform for evaluating student responses to open-ended
+    interview prompts. The system supports both interviewees and interviewers, offering transcription,
+    rubric-based evaluation, and reflective learning.
+  </p>
+
+  <div class="button-container">
+    <a href="/login" class="nav-button">Start My Interview</a>
+    <button class="nav-button disabled-button" disabled>Admin Panel (Coming Soon)</button>
+  </div>
+</body>
+</html>
