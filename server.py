@@ -63,44 +63,54 @@ def evaluate():
 @app.route("/upload-audio", methods=["POST"])
 def upload_audio():
     if "audio" not in request.files:
-        return jsonify({"error": "No audio file provided"}), 400
+        return jsonify({"success": False, "error": "No audio file provided"}), 400
+
     audio = request.files["audio"]
-    filename = secure_filename(audio.filename)
-    save_path = os.path.join(UPLOAD_FOLDER, filename)
-    audio.save(save_path)
-    return jsonify({"success": True, "filename": filename})
+    filename = request.form.get("filename", "interview.webm")
 
+    if not filename:
+        return jsonify({"success": False, "error": "Filename is missing"}), 400
 
-@app.route("/transcribe", methods=["POST"])
-def transcribe():
     try:
-        data = request.get_json()
-        filename = data.get("filename")
-        if not filename:
-            return jsonify({"error": "No filename provided"}), 400
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        audio.save(filepath)
+        print(f"✅ Saved audio file to: {filepath}")
 
-        path = os.path.join(UPLOAD_FOLDER, filename)
-        with open(path, "rb") as audio_file:
-            transcript = openai.Audio.transcribe("whisper-1", audio_file)
-
-        # Save to JSON
-        transcript_data = {
-            "filename": filename,
-            "email": data.get("email"),
-            "name": data.get("name"),
-            "transcript": transcript["text"],
-            "timestamp": data.get("timestamp")
+        # Placeholder for Whisper or other transcription logic
+        transcript_json = {
+            "text": "This is a placeholder transcript.",
+            "segments": [],
+            "speaker_labels": [],
         }
 
-        json_path = os.path.join(TRANSCRIPT_FOLDER, filename.replace(".webm", ".json"))
-        with open(json_path, "w") as f:
-            json.dump(transcript_data, f, indent=2)
-
-        return jsonify({"success": True, "transcript": transcript["text"]})
-
+        return jsonify({"success": True, "transcript": transcript_json})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(f"❌ Upload or transcription failed: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route("/transcribe", methods=["POST"])
+def transcribe_audio():
+    data = request.get_json()
+    filename = data.get("filename")
+
+    if not filename:
+        return jsonify({"success": False, "error": "No filename provided"}), 400
+
+    audio_path = os.path.join(UPLOAD_FOLDER, filename)
+
+    if not os.path.exists(audio_path):
+        return jsonify({"success": False, "error": "Audio file not found"}), 404
+
+    try:
+        with open(audio_path, "rb") as audio_file:
+            result = openai.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file
+            )
+        return jsonify({"success": True, "transcript": result.text})
+    except Exception as e:
+        print(f"❌ Transcription error: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/evaluate-transcript", methods=["POST"])
 def evaluate_transcript():
@@ -119,6 +129,31 @@ def evaluate_transcript():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route("/submit-transcript", methods=["POST"])
+def submit_transcript():
+    data = request.get_json()
+    email = data.get("email")
+    transcript = data.get("transcript")
+    reflection = data.get("reflection")
+
+    if not email or not transcript:
+        return jsonify({"success": False, "error": "Missing email or transcript"}), 400
+
+    try:
+        save_dir = os.path.join("submitted_transcripts")
+        os.makedirs(save_dir, exist_ok=True)
+
+        base_filename = email.replace("@", "_at_").replace(".", "_")
+        with open(os.path.join(save_dir, f"{base_filename}_transcript.txt"), "w") as tf:
+            tf.write(transcript)
+
+        with open(os.path.join(save_dir, f"{base_filename}_reflection.txt"), "w") as rf:
+            rf.write(reflection or "")
+
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"❌ Error saving submission: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/transcripts", methods=["GET"])
 def list_transcripts():
