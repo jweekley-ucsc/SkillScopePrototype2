@@ -3,9 +3,9 @@
 import os
 import json
 import csv
-import io  # ← THIS IS MISSING
-
 from datetime import datetime, timezone
+import io
+
 
 # Paths
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -51,7 +51,8 @@ new_request = {
     "received_at": datetime.now(timezone.utc).isoformat()
 }
 
-with open(requests_path, "a") as outfile:
+with open(requests_path, "w") as outfile:
+
     outfile.write(json.dumps(new_request) + "\n")
 
 print(f"✅ Appended {len(transcripts)} transcript(s) to {requests_path}")

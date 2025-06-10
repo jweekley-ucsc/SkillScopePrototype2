@@ -98,7 +98,7 @@ document.addEventListener("DOMContentLoaded", () => {
   fetch("/evaluate-transcripts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ rubric: rubricCSV, transcripts: payload })
+    body: JSON.stringify({ rubric_csv: rubricCSV, transcripts: payload })
   })
   .then(res => res.json())
   .then(data => {

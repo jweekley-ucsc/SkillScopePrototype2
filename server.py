@@ -8,7 +8,7 @@ from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import openai
 from datetime import datetime
-
+from backend.llm_assess_interviews import evaluate_transcript_block
 
 # Load environment variables
 load_dotenv()
@@ -214,42 +214,40 @@ def submit_transcript():
 
     return jsonify({"success": True})
 
-@app.route("/evaluate-transcripts", methods=["POST"])
-def evaluate_transcripts():
-    from backend.llm_assess_interviews import evaluate_single_transcript
 
-    payload = request.get_json()
-    rubric_csv = payload.get("rubric")
-    transcripts = payload.get("transcripts")
+    request_block = {
+        "rubric_csv": rubric_csv,
+        "evaluation_prompt": prompt,
+        "transcripts": transcripts
+    }
 
-    if not rubric_csv or not transcripts:
-        print("🚨 Missing rubric or transcripts in payload.")
-        return jsonify({"success": False, "error": "Missing rubric or transcripts"}), 400
+    try:
+        results = evaluate_transcript_block(request_block)
+        for r in results:
+            print(f"🧠 Scoring: {r['email']}...")
 
-    print(f"🔍 Called /evaluate-transcripts with {len(transcripts)} transcript(s).")
-    print("🔎 Payload emails:")
-    for i, t in enumerate(transcripts):
-        print(f"  {i+1:02d}. {t.get('email', 'unknown')}")
+        # Save results to instance/responses/
+        email = results[0].get("email", "batch") if results else "batch"
+        user = re.sub(r"[^\w\-]", "_", email.split("@")[0])
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%MZ")
+        log_path = os.path.join("instance", "responses", f"llm_eval_responses_{user}_{timestamp}.jsonl")
 
-    results = []
-    for entry in transcripts:
-        try:
-            name = entry.get("name", "Unknown")
-            email = entry.get("email", "unknown@none.edu")
-            text = entry.get("transcript", "")
-            result = evaluate_single_transcript(text, rubric_csv)
-            results.append({ "name": name, "email": email, "score": result })
-            print(f"🧠 Scoring: {email}...")
-        except Exception as e:
-            print(f"❌ Error scoring {entry.get('email')}: {e}")
-            results.append({ "name": name, "email": email, "error": str(e) })
+        with open(log_path, "a") as f:
+            for r in results:
+                f.write(json.dumps(r) + "\n")
 
-    print(f"✅ Evaluated {len(results)} transcript(s).")
-    return jsonify({
-        "success": True,
-        "result": f"Evaluated {len(results)} transcript(s).",
-        "evaluations": results
-    })
+        print(f"✅ Evaluated {len(results)} transcript(s).")
+        return jsonify({
+            "success": True,
+            "evaluated": len(results),
+            "log_path": log_path,
+            "evaluations": results
+        })
+
+    except Exception as e:
+        print(f"❌ Evaluation error: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 @app.route("/transcripts", methods=["GET"])
 def get_transcripts():
@@ -318,7 +316,9 @@ def evaluate_multiple_transcripts():
     from backend.llm_assess_interviews import evaluate_single_transcript
 
     payload = request.get_json()
-    rubric_csv = payload.get("rubric")
+    print("📥 Full incoming JSON payload:")
+    print(json.dumps(payload, indent=2))
+    rubric_csv = payload.get("rubric_csv")
     transcripts = payload.get("transcripts")
 
     if not rubric_csv or not transcripts:

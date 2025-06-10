@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 from openai import OpenAI, OpenAIError
 import re
+import io
 
 # Load environment and initialize OpenAI client
 load_dotenv()
@@ -20,56 +21,6 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Resolve project base directory
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-
-def evaluate_single_transcript(transcript_text, rubric_csv):
-    """
-    Apply a simple heuristic scoring to a transcript using the rubric definition.
-
-    Args:
-        transcript_text (str): The interview transcript to evaluate.
-        rubric_csv (str): Rubric in CSV format with columns: Skill, Level, Score, Description
-
-    Returns:
-        dict: Evaluation summary per skill
-    """
-    rubric = []
-
-    # Parse CSV rubric
-    f = io.StringIO(rubric_csv)
-    reader = csv.DictReader(f)
-    for row in reader:
-        try:
-            row['Score'] = int(row['Score'])
-        except ValueError:
-            row['Score'] = 0
-        rubric.append(row)
-
-    # Group rubric by skill
-    skills = {}
-    for row in rubric:
-        skill = row['Skill']
-        if skill not in skills:
-            skills[skill] = []
-        skills[skill].append(row)
-
-    # Dummy heuristic: assign highest level if transcript mentions the skill keyword
-    evaluation = {}
-    lower_text = transcript_text.lower()
-
-    for skill, levels in skills.items():
-        matched = any(skill.lower() in lower_text for skill in skill.split())  # naive match
-        if matched:
-            best = max(levels, key=lambda x: x['Score'])
-        else:
-            best = min(levels, key=lambda x: x['Score'])
-
-        evaluation[skill] = {
-            "level": best["Level"],
-            "score": best["Score"],
-            "description": best["Description"]
-        }
-
-    return evaluation
 
 # Argument parser
 parser = argparse.ArgumentParser(description="Evaluate SkillScope interviews using an LLM.")
@@ -122,25 +73,21 @@ def score_transcript(system_prompt, transcript_text, model):
 
 # Load requests
 input_path = args.input if args.input else default_input_path
-if not os.path.exists(input_path):
-    raise FileNotFoundError(f"❌ Input file not found: {input_path}")
+print(f"📂 Looking at: {input_path}")
 
 with open(input_path, "r") as infile:
-    requests = [json.loads(line) for line in infile]
+    requests = [json.loads(line) for line in infile if line.strip()]
 
-results = []
-output_path = args.output  # Can still be overridden by CLI
-
-# Evaluate
+# Evaluate each block
 for request in requests:
     rubric = request["rubric_csv"]
     prompt = request["evaluation_prompt"]
     transcripts = request.get("transcripts", [])
     system_prompt = build_system_prompt(rubric, prompt)
 
-    if output_path is None:
-        output_path = generate_output_filename(transcripts)
+    current_output_path = args.output or generate_output_filename(transcripts)
 
+    results = []
     for entry in transcripts:
         email = entry.get("email", "unknown")
         transcript_text = entry.get("transcript", "")
@@ -154,9 +101,58 @@ for request in requests:
             "evaluated_at": datetime.now(timezone.utc).isoformat()
         })
 
-# Save results
-with open(output_path, "a") as outfile:
-    for entry in results:
-        outfile.write(json.dumps(entry) + "\n")
+    with open(current_output_path, "a") as outfile:
+        for entry in results:
+            outfile.write(json.dumps(entry) + "\n")
 
-print(f"✅ Evaluated {len(results)} transcript(s). Results saved to {output_path}")
+    print(f"✅ Evaluated {len(results)} transcript(s). Results saved to {current_output_path}")
+def evaluate_transcript_block(request_block, model="gpt-4"):
+    rubric = request_block["rubric_csv"]
+    prompt = request_block["evaluation_prompt"]
+    transcripts = request_block.get("transcripts", [])
+    system_prompt = build_system_prompt(rubric, prompt)
+
+    results = []
+    for entry in transcripts:
+        email = entry.get("email", "unknown")
+        transcript_text = entry.get("transcript", "")
+        print(f"🧠 Scoring: {email}...")
+
+        feedback = score_transcript(system_prompt, transcript_text, model=model)
+
+        results.append({
+            "email": email,
+            "feedback": feedback,
+            "evaluated_at": datetime.now(timezone.utc).isoformat()
+        })
+def evaluate_single_transcript(transcript_text, rubric_csv, model="gpt-4", prompt="Evaluate this student's performance."):
+    system_prompt = build_system_prompt(rubric_csv, prompt)
+    feedback = score_transcript(system_prompt, transcript_text, model=model)
+    return {
+        "email": "anonymous",  # optionally pass email if known
+        "feedback": feedback,
+        "evaluated_at": datetime.now(timezone.utc).isoformat()
+    }
+def evaluate_transcript_block(request_block, model="gpt-4"):
+    rubric = request_block["rubric_csv"]
+    prompt = request_block.get("evaluation_prompt", "Evaluate this student's performance.")
+    transcripts = request_block.get("transcripts", [])
+    system_prompt = build_system_prompt(rubric, prompt)
+
+    results = []
+    for entry in transcripts:
+        email = entry.get("email", "unknown")
+        transcript_text = entry.get("transcript", "")
+        print(f"🧠 Scoring: {email}...")
+
+        feedback = score_transcript(system_prompt, transcript_text, model=model)
+
+        results.append({
+            "email": email,
+            "feedback": feedback,
+            "evaluated_at": datetime.now(timezone.utc).isoformat()
+        })
+
+    return results
+
+    return results
