@@ -1,15 +1,32 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
     <title>SkillScope Interview Service</title>
     <link rel="stylesheet" href="/static/css/style.css">
-
 </head>
 <body>
     <main class="container">
         <h1>Interview Session</h1>
+
+        <section class="mb-4">
+            <label class="inline-flex items-center">
+                <input type="checkbox" id="showScoredToggle" class="form-checkbox text-blue-600 mr-2">
+                <span class="text-gray-700">Show already scored transcripts</span>
+            </label>
+        </section>
+
+        <section class="mb-8">
+            <h2 class="text-2xl font-semibold mb-4">Sample Task</h2>
+            <div class="bg-white p-4 rounded shadow space-y-4 text-gray-800 text-base leading-relaxed">
+                <p>In today’s task, you will use LLMs to create personalized Bingo Squares to facilitate connection in a Human Bingo Activity (a simplified version of the personalized Human Bingo activity you participated in during the first section at the beginning of this quarter).</p>
+                <p><strong>Human Bingo:</strong> Human Bingo is an icebreaker activity that helps to facilitate connection in an in-person community event. Traditionally, each individual is given a 5x5 Bingo Board with Bingo Squares containing fun random descriptors about attendees (e.g. “never seen star wars”, “loves boba”, etc.). Attendees mingle around, introduce themselves to new people and search for those who can help them check off a bingo square containing a matching descriptor (max one square per person).</p>
+                <p><strong>Personalizing Human Bingo for Connection:</strong> We’d like to personalize the bingo squares so that they aren’t just fun random facts, but also contain squares that facilitate more meaningful connections between attendees over shared interests, goals and hobbies. For example, if one participant loves sports, it might be particularly helpful to connect them with someone else who loves sports. If two people want to do startups in edtech, it’d be great if we could help them find each other.</p>
+                <p>Below, you can see an example of a human bingo board we made in the past. Some of the squares on this board are intended to help facilitate connection and are designed based on participant responses to a survey about their interests, goals, hobbies and more.</p>
+                <p><strong>Participant Data:</strong> Before the event takes place, people attending the event fill out a pre-event survey about their interests and goals. We’d like to design LLM prompts that help to generate bingo squares (and ultimately, bingo boards) for each participant based on the survey responses. For your task, you can use the following dataset containing real survey responses from a past event we ran: <em>Participant Data – Live Task</em>.</p>
+                <p><strong>Task:</strong> Create a Prompt Engineering Workflow including a series of prompts and evaluations that use the participant data given above to generate Bingo Squares that are likely to facilitate connection for the participants. We will be generating a subset of the squares (roughly 7–9) on the bingo board in this task...</p>
+            </div>
+        </section>
 
         <section class="timer-section">
             <label>Time Remaining:</label>

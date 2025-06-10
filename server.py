@@ -7,6 +7,8 @@ from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import openai
+from datetime import datetime
+
 
 # Load environment variables
 load_dotenv()
@@ -15,6 +17,10 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 # App and folders
 app = Flask(__name__, static_url_path='/static')
 CORS(app)
+
+@app.before_request
+def debug_route_origin():
+    print(f"➡️  Incoming request: {request.method} {request.path}")
 
 UPLOAD_FOLDER = "instance/uploads"
 TRANSCRIPT_FOLDER = "instance/transcripts"
@@ -25,7 +31,23 @@ EVALUATION_FOLDER = "instance/evaluations"
 for folder in [UPLOAD_FOLDER, TRANSCRIPT_FOLDER, RUBRIC_FOLDER, EVALUATION_FOLDER]:
     os.makedirs(folder, exist_ok=True)
 
+#only uploads unscored transcripts based on a persistent index file (e.g., scored_transcripts.jsonl)
 
+def load_scored_filenames():
+    scored_path = os.path.join("instance", "responses", "scored_transcripts.jsonl")
+    if not os.path.exists(scored_path):
+        return set()
+    
+    scored_filenames = set()
+    with open(scored_path, "r") as f:
+        for line in f:
+            try:
+                entry = json.loads(line)
+                if "filename" in entry:
+                    scored_filenames.add(entry["filename"])
+            except json.JSONDecodeError:
+                continue
+    return scored_filenames
 @app.route("/")
 @app.route("/login")
 def login():
@@ -117,6 +139,9 @@ def evaluate_transcript():
     from backend.llm_assess_interviews import evaluate_single_transcript
 
     payload = request.get_json()
+    print("🧾 Incoming evaluation request payload:")
+    print(json.dumps(payload, indent=2))
+
     transcript_text = payload.get("transcript")
     rubric_csv = payload.get("rubric")
 
@@ -131,45 +156,199 @@ def evaluate_transcript():
 
 @app.route("/submit-transcript", methods=["POST"])
 def submit_transcript():
+    import hashlib
+
     data = request.get_json()
     email = data.get("email")
     transcript = data.get("transcript")
-    reflection = data.get("reflection")
+    reflection = data.get("reflection", "")
+    submitted_at = datetime.utcnow().isoformat()
 
     if not email or not transcript:
         return jsonify({"success": False, "error": "Missing email or transcript"}), 400
 
-    try:
-        save_dir = os.path.join("submitted_transcripts")
-        os.makedirs(save_dir, exist_ok=True)
+    # Construct full entry
+    name = email.split("@")[0].replace(".", " ").title()
+    entry = {
+        "name": name,
+        "email": email,
+        "transcript": transcript,
+        "reflection": reflection,
+        "submitted_at": submitted_at
+    }
 
-        base_filename = email.replace("@", "_at_").replace(".", "_")
-        with open(os.path.join(save_dir, f"{base_filename}_transcript.txt"), "w") as tf:
-            tf.write(transcript)
+    # ---- Part 1: Append to submissions.jsonl (raw log) ----
+    submissions_path = os.path.join("instance", "submissions", "submissions.jsonl")
+    os.makedirs(os.path.dirname(submissions_path), exist_ok=True)
+    with open(submissions_path, "a") as f:
+        f.write(json.dumps(entry) + "\n")
 
-        with open(os.path.join(save_dir, f"{base_filename}_reflection.txt"), "w") as rf:
-            rf.write(reflection or "")
+    # ---- Part 2: Update transcripts.json (deduplicated list) ----
+    transcripts_path = os.path.join("instance", "transcripts", "transcripts.json")
+    os.makedirs(os.path.dirname(transcripts_path), exist_ok=True)
 
-        return jsonify({"success": True})
-    except Exception as e:
-        print(f"❌ Error saving submission: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
+    transcripts = []
+    if os.path.exists(transcripts_path):
+        with open(transcripts_path, "r") as f:
+            try:
+                transcripts = json.load(f)
+            except json.JSONDecodeError:
+                transcripts = []
+
+    def entry_hash(e):
+        key = f"{e['email']}::{e['transcript']}"
+        return hashlib.md5(key.encode()).hexdigest()
+
+    existing_hashes = {entry_hash(e) for e in transcripts}
+    new_hash = entry_hash(entry)
+
+    if new_hash not in existing_hashes:
+        transcripts.append(entry)
+        with open(transcripts_path, "w") as f:
+            json.dump(transcripts, f, indent=2)
+
+        # ---- Part 3: Also append to transcripts.jsonl ----
+        transcripts_jsonl_path = os.path.join("instance", "transcripts", "transcripts.jsonl")
+        with open(transcripts_jsonl_path, "a") as f:
+            f.write(json.dumps(entry) + "\n")
+
+    return jsonify({"success": True})
+
+@app.route("/evaluate-transcripts", methods=["POST"])
+def evaluate_transcripts():
+    from backend.llm_assess_interviews import evaluate_single_transcript
+
+    payload = request.get_json()
+    rubric_csv = payload.get("rubric")
+    transcripts = payload.get("transcripts")
+
+    if not rubric_csv or not transcripts:
+        print("🚨 Missing rubric or transcripts in payload.")
+        return jsonify({"success": False, "error": "Missing rubric or transcripts"}), 400
+
+    print(f"🔍 Called /evaluate-transcripts with {len(transcripts)} transcript(s).")
+    print("🔎 Payload emails:")
+    for i, t in enumerate(transcripts):
+        print(f"  {i+1:02d}. {t.get('email', 'unknown')}")
+
+    results = []
+    for entry in transcripts:
+        try:
+            name = entry.get("name", "Unknown")
+            email = entry.get("email", "unknown@none.edu")
+            text = entry.get("transcript", "")
+            result = evaluate_single_transcript(text, rubric_csv)
+            results.append({ "name": name, "email": email, "score": result })
+            print(f"🧠 Scoring: {email}...")
+        except Exception as e:
+            print(f"❌ Error scoring {entry.get('email')}: {e}")
+            results.append({ "name": name, "email": email, "error": str(e) })
+
+    print(f"✅ Evaluated {len(results)} transcript(s).")
+    return jsonify({
+        "success": True,
+        "result": f"Evaluated {len(results)} transcript(s).",
+        "evaluations": results
+    })
 
 @app.route("/transcripts", methods=["GET"])
-def list_transcripts():
+def get_transcripts():
     transcripts_path = os.path.join("instance", "transcripts", "transcripts.jsonl")
-    results = []
-    try:
-        with open(transcripts_path, "r") as f:
-            for line in f:
-                if line.strip():
-                    data = json.loads(line)
-                    results.append(data)
-        return jsonify(results)
-    except Exception as e:
-        print(f"[ERROR] Failed to load transcripts: {e}")
-        return jsonify({"error": str(e)}), 500
+    if not os.path.exists(transcripts_path):
+        return jsonify([])
 
+    with open(transcripts_path, "r") as f:
+        entries = [json.loads(line) for line in f if line.strip()]
+
+    return jsonify(entries)
+
+
+@app.route("/generate-eval-request", methods=["POST"])
+def generate_eval_request():
+    import json
+    from datetime import datetime, timezone
+
+    submissions_path = os.path.join("instance", "submissions", "submissions.jsonl")
+    requests_path = os.path.join("instance", "requests", "llm_eval_requests.jsonl")
+
+    RUBRIC_CSV = """Skill,Level,Score,Description
+Prompt Engineering,Missing,0,No prompt or completely irrelevant
+Prompt Engineering,Mastery,4,Clear, efficient, task-optimized
+Reflection,Missing,0,No reflection
+Reflection,Mastery,4,Insightful and thoughtful reflection"""
+
+    EVAL_PROMPT = "Evaluate the clarity and intent of each transcript as if submitted by a student in a technical interview."
+
+    transcripts = []
+    try:
+        with open(submissions_path, "r") as infile:
+            for line in infile:
+                try:
+                    entry = json.loads(line)
+                    if "email" in entry and "transcript" in entry:
+                        transcripts.append({
+                            "email": entry["email"],
+                            "transcript": entry["transcript"]
+                        })
+                except json.JSONDecodeError:
+                    continue
+    except FileNotFoundError:
+        return jsonify({"status": "error", "message": "Submissions file not found"}), 404
+
+    if not transcripts:
+        return jsonify({"status": "empty", "message": "No valid transcript entries found."}), 200
+
+    request_entry = {
+        "rubric_csv": RUBRIC_CSV,
+        "evaluation_prompt": EVAL_PROMPT,
+        "transcripts": transcripts,
+        "received_at": datetime.now(timezone.utc).isoformat()
+    }
+
+    with open(requests_path, "a") as outfile:
+        outfile.write(json.dumps(request_entry) + "\n")
+
+    return jsonify({
+        "status": "success",
+        "appended": len(transcripts),
+        "saved_to": requests_path
+    })
+@app.route("/evaluate-transcripts", methods=["POST"])
+def evaluate_multiple_transcripts():
+    from backend.llm_assess_interviews import evaluate_single_transcript
+
+    payload = request.get_json()
+    rubric_csv = payload.get("rubric")
+    transcripts = payload.get("transcripts")
+
+    if not rubric_csv or not transcripts:
+        print("🚨 Missing rubric or transcripts in payload.")
+        return jsonify({"success": False, "error": "Missing rubric or transcripts"}), 400
+
+    print(f"🔍 Called /evaluate-transcripts with {len(transcripts)} transcript(s).")
+    print("🔎 Payload emails:")
+    for i, t in enumerate(transcripts):
+        print(f"  {i+1:02d}. {t.get('email', 'unknown')}")
+
+    results = []
+    for entry in transcripts:
+        try:
+            name = entry.get("name", "Unknown")
+            email = entry.get("email", "unknown@none.edu")
+            text = entry.get("transcript", "")
+            result = evaluate_single_transcript(text, rubric_csv)
+            results.append({ "name": name, "email": email, "score": result })
+            print(f"🧠 Scoring: {email}...")
+        except Exception as e:
+            print(f"❌ Error scoring {email}: {e}")
+            results.append({ "name": name, "email": email, "error": str(e) })
+
+    print(f"✅ Evaluated {len(results)} transcript(s).")
+    return jsonify({
+        "success": True,
+        "result": f"Evaluated {len(results)} transcript(s).",
+        "evaluations": results
+    })
 
 if __name__ == "__main__":
     app.run(port=5050, debug=True)

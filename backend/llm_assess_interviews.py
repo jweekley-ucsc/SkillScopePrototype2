@@ -18,6 +18,59 @@ import re
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# Resolve project base directory
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+def evaluate_single_transcript(transcript_text, rubric_csv):
+    """
+    Apply a simple heuristic scoring to a transcript using the rubric definition.
+
+    Args:
+        transcript_text (str): The interview transcript to evaluate.
+        rubric_csv (str): Rubric in CSV format with columns: Skill, Level, Score, Description
+
+    Returns:
+        dict: Evaluation summary per skill
+    """
+    rubric = []
+
+    # Parse CSV rubric
+    f = io.StringIO(rubric_csv)
+    reader = csv.DictReader(f)
+    for row in reader:
+        try:
+            row['Score'] = int(row['Score'])
+        except ValueError:
+            row['Score'] = 0
+        rubric.append(row)
+
+    # Group rubric by skill
+    skills = {}
+    for row in rubric:
+        skill = row['Skill']
+        if skill not in skills:
+            skills[skill] = []
+        skills[skill].append(row)
+
+    # Dummy heuristic: assign highest level if transcript mentions the skill keyword
+    evaluation = {}
+    lower_text = transcript_text.lower()
+
+    for skill, levels in skills.items():
+        matched = any(skill.lower() in lower_text for skill in skill.split())  # naive match
+        if matched:
+            best = max(levels, key=lambda x: x['Score'])
+        else:
+            best = min(levels, key=lambda x: x['Score'])
+
+        evaluation[skill] = {
+            "level": best["Level"],
+            "score": best["Score"],
+            "description": best["Description"]
+        }
+
+    return evaluation
+
 # Argument parser
 parser = argparse.ArgumentParser(description="Evaluate SkillScope interviews using an LLM.")
 parser.add_argument("--input", required=False, help="Path to llm_eval_requests.jsonl")
@@ -25,8 +78,8 @@ parser.add_argument("--output", required=False, help="Optional path to write out
 parser.add_argument("--model", default="gpt-4", help="LLM model to use (default: gpt-4)")
 args = parser.parse_args()
 
-# Fallback default input location
-default_input_path = os.path.join("instance", "requests", "llm_eval_requests.jsonl")
+# Default input path
+default_input_path = os.path.join(BASE_DIR, "instance", "requests", "llm_eval_requests.jsonl")
 
 # Smart default output name
 def generate_output_filename(transcripts):
@@ -34,7 +87,7 @@ def generate_output_filename(transcripts):
     user = email.split("@")[0]
     user = re.sub(r"[^\w\-]", "_", user)
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%MZ")
-    return os.path.join("instance", "responses", f"llm_eval_responses_{user}_{timestamp}.jsonl")
+    return os.path.join(BASE_DIR, "instance", "responses", f"llm_eval_responses_{user}_{timestamp}.jsonl")
 
 # Build system prompt
 def build_system_prompt(rubric_csv, custom_prompt):
@@ -69,6 +122,9 @@ def score_transcript(system_prompt, transcript_text, model):
 
 # Load requests
 input_path = args.input if args.input else default_input_path
+if not os.path.exists(input_path):
+    raise FileNotFoundError(f"❌ Input file not found: {input_path}")
+
 with open(input_path, "r") as infile:
     requests = [json.loads(line) for line in infile]
 

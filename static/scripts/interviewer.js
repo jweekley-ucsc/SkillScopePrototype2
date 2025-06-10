@@ -83,39 +83,86 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   submitEvalButton.addEventListener("click", () => {
-    if (!rubricCSV || selectedTranscripts.size === 0) {
-      alert("Please upload a rubric and select at least one transcript.");
-      return;
-    }
+  if (!rubricCSV || selectedTranscripts.size === 0) {
+    alert("Please upload a rubric and select at least one transcript.");
+    return;
+  }
 
-    const payload = Array.from(selectedTranscripts).map(x => JSON.parse(x)).map(entry => ({
-      name: entry.name || "Unknown",
-      email: entry.email || "unknown@none.edu",
-      transcript: entry.transcript,
-      submitted_at: entry.submitted_at || entry.timestamp || "unknown"
-    }));
+  const payload = Array.from(selectedTranscripts).map(x => JSON.parse(x)).map(entry => ({
+    name: entry.name || "Unknown",
+    email: entry.email || "unknown@none.edu",
+    transcript: entry.transcript,
+    submitted_at: entry.submitted_at || entry.timestamp || "unknown"
+  }));
 
-    fetch("/evaluate-transcript", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rubric: rubricCSV, transcripts: payload })
-    })
-    .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        evaluationSummary.textContent = data.result || "Submitted successfully.";
-        selectedTranscripts.clear();
-        fetchTranscripts();
-        updateTranscriptPreview();
+  fetch("/evaluate-transcripts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rubric: rubricCSV, transcripts: payload })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+  let summaryText = `${data.result || "Evaluated"}\n\n`;
+
+  if (data.evaluations && Array.isArray(data.evaluations)) {
+    data.evaluations.forEach(entry => {
+      summaryText += `🔹 ${entry.name} (${entry.email})\n`;
+      if (entry.error) {
+        summaryText += `  ❌ Error: ${entry.error}\n\n`;
       } else {
-        evaluationSummary.textContent = "Evaluation failed: " + (data.error || "Unknown error");
+        Object.entries(entry.score).forEach(([skill, result]) => {
+          summaryText += `  • ${skill}: ${result.level} (${result.score}) – ${result.description}\n`;
+        });
+        summaryText += `\n`;
       }
-    })
-    .catch(err => {
-      evaluationSummary.textContent = "Evaluation request failed.";
-      console.error("Evaluation submission error:", err);
     });
+  }
+
+  evaluationSummary.textContent = summaryText.trim();
+
+
+if (data.evaluations && Array.isArray(data.evaluations)) {
+  data.evaluations.forEach(entry => {
+    summaryText += `🔹 ${entry.name} (${entry.email})\n`;
+
+    if (entry.error) {
+      summaryText += `  ❌ Error: ${entry.error}\n\n`;
+    } else {
+      Object.entries(entry.score).forEach(([skill, result]) => {
+        summaryText += `  • ${skill}: ${result.level} (${result.score}) – ${result.description}\n`;
+      });
+      summaryText += `\n`;
+    }
   });
+}
+
+evaluationSummary.textContent = summaryText.trim();
+
+      selectedTranscripts.clear();
+      fetchTranscripts();
+      updateTranscriptPreview();
+
+      // Trigger LLM eval request generation
+      fetch("/generate-eval-request", { method: "POST" })
+        .then(evalRes => evalRes.json())
+        .then(evalData => {
+          console.log(`✅ Eval request generated: ${evalData.appended || 0} transcripts`);
+        })
+        .catch(err => {
+          console.error("❌ Failed to generate eval request:", err);
+        });
+
+    } else {
+      evaluationSummary.textContent = "Evaluation failed: " + (data.error || "Unknown error");
+    }
+  })
+  .catch(err => {
+    evaluationSummary.textContent = "Evaluation request failed.";
+    console.error("Evaluation submission error:", err);
+  });
+});
+
 
   selectAllBtn.addEventListener("click", () => {
     selectedTranscripts.clear();

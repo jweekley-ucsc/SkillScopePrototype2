@@ -120,8 +120,16 @@ document.addEventListener("DOMContentLoaded", () => {
             };
 
             mediaRecorder.start();
+
+            // Button styling changes
             startButton.disabled = true;
+            startButton.classList.add("bg-gray-400", "cursor-not-allowed", "opacity-60");
+            startButton.classList.remove("bg-blue-600", "hover:bg-blue-700");
+
+            stopButton.classList.remove("hidden");
             stopButton.disabled = false;
+            stopButton.classList.remove("opacity-60", "cursor-not-allowed", "bg-gray-400");
+            stopButton.classList.add("bg-red-600", "hover:bg-red-700");
         });
     });
 
@@ -129,34 +137,48 @@ document.addEventListener("DOMContentLoaded", () => {
         if (mediaRecorder && mediaRecorder.state === "recording") {
             mediaRecorder.stop();
             stopButton.disabled = true;
+            stopButton.classList.add("bg-gray-400", "cursor-not-allowed", "opacity-60");
+            stopButton.classList.remove("bg-red-600", "hover:bg-red-700");
         }
     });
 
     submitButton.addEventListener("click", () => {
-        const email = localStorage.getItem("skillScopeUserEmail");
-        const transcript = transcriptPreview.textContent;
-        const reflection = reflectionInput.value;
+    const email = localStorage.getItem("skillScopeUserEmail");
+    const transcript = transcriptPreview.textContent;
+    const reflection = reflectionInput.value;
 
-        if (!email || !transcript) {
-            alert("Missing email or transcript.");
-            return;
+    if (!email || !transcript) {
+        alert("Missing email or transcript.");
+        return;
+    }
+
+    fetch("/submit-transcript", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, transcript, reflection })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            alert("Transcript submitted successfully.");
+            localStorage.removeItem("sessionId");
+
+            // Trigger eval request generation
+            fetch("/generate-eval-request", { method: "POST" })
+              .then(res => res.json())
+              .then(evalData => {
+                console.log(`✅ Eval request appended: ${evalData.appended || 0} transcripts`);
+              })
+              .catch(err => {
+                console.error("❌ Eval request trigger failed:", err);
+              });
+
+        } else {
+            alert("Submission failed.");
         }
-
-        fetch("/submit-transcript", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, transcript, reflection })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                alert("Transcript submitted successfully.");
-                localStorage.removeItem("sessionId");
-            } else {
-                alert("Submission failed.");
-            }
-        });
     });
+});
+
 
     // ⏱️ Automatically start timer on page load
     startTimer();
